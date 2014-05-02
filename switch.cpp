@@ -22,7 +22,7 @@ RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
 uint64_t dst_address = pipes[1];
 int fd;
 struct input_event ev;
-bool daemon_on = true;
+bool daemon_on = false;
 bool val_changed = false;
 void radio_setup(void)
 {
@@ -53,6 +53,7 @@ signed long write_to_radio(uint64_t write_address, int value)
     //radio.stopListening();
     // bool written = radio.write(&value,1);
     //syslog(LOG_INFO,"Wrote value: %i\r\n",value);
+    syslog(LOG_INFO, "Starting at %lu, writing value %i\n",start, value);
     if ( radio.write(&value,1) ) {
 
         if ( !radio.available() ) {
@@ -64,9 +65,10 @@ signed long write_to_radio(uint64_t write_address, int value)
         return (millis() - start);
     }
     else {
+
         return 0;
     }
-    radio.startListening();
+    //radio.startListening();
 }
 
 int main(int argc, char** argv)
@@ -126,13 +128,13 @@ int main(int argc, char** argv)
                 int i = ev.code;
                 // Select case on send value, one print statement at end
                 int writeval = 0;
-                syslog(LOG_INFO, "Remote value %i, bool %d, address %#010dst_address\n", i, val_changed, dst_address);
-/*                switch (i) {
-                    case 398: printf("Red  "); dst_address = pipes[1]; break;
-                    case 399: printf("Green"); break;
-                    case 400: printf("Yello"); dst_address = pipes[2]; break;
-                    case 401: printf("Blue "); break;
-                    default:*/
+                syslog(LOG_INFO, "Remote value %i, bool %d, address %#llx\n", i, val_changed, dst_address);
+                switch (i) {
+                    case 398: syslog(LOG_INFO,"Red"); dst_address = pipes[1]; break;
+                    case 399: syslog(LOG_INFO,"Green"); break;
+                    case 400: syslog(LOG_INFO,"Yello"); dst_address = pipes[2]; break;
+                    case 401: syslog(LOG_INFO,"Blue "); break;
+                    default:
                         if (i == 11) {
                             val_changed = true;
                             writeval = 0;
@@ -143,9 +145,8 @@ int main(int argc, char** argv)
                             writeval = 0;
                             val_changed = true;
                         }
-               // }
+                }
                 if ( val_changed ) {
-                    syslog(LOG_INFO, "Sending %i\n", i);
                     signed long ret_time = write_to_radio(dst_address, writeval);
                     if (ret_time==0) {
                         syslog(LOG_INFO, "Sending of %i failed\n", writeval);
@@ -155,6 +156,7 @@ int main(int argc, char** argv)
                         //printf("Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
                     }
                     ret_time = 0;
+                    val_changed = false;
                 }
             }
         }
