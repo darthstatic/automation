@@ -18,7 +18,7 @@ using namespace std;
 const uint64_t pipes[3] ={ 0xABCDABCD71LL, 0x544d52687CLL, 0x2756BEEFACLL };
 // NOPE: spi device, spi speed, ce gpio pin
 // Radio pin, CE pin, speed
-RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
+RF24 radio(RPI_V2_GPIO_P1_18, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
 uint64_t dst_address = pipes[1];
 int fd;
 struct input_event ev;
@@ -37,7 +37,8 @@ void radio_setup(void)
     //radio.setChannel(76);
     //radio.setCRCLength(RF24_CRC_16);
     radio.openReadingPipe(1,pipes[0]);
-    radio.powerUp();
+    radio.openWritingPipe(dst_address);
+    //radio.powerUp();
     radio.startListening();
     radio.printDetails();
     //radio.openReadingPipe(1,pipes[0]);
@@ -46,16 +47,16 @@ void radio_setup(void)
 
 signed long write_to_radio(uint64_t write_address, int value)
 {
-    radio.openWritingPipe(write_address);
+    radio.stopListening();
+    //radio.openWritingPipe(write_address);
     // Return 0 on no response, return time on success
     char gotByte[8];
     unsigned long start = millis();
     //radio.stopListening();
     // bool written = radio.write(&value,1);
-    //syslog(LOG_INFO,"Wrote value: %i\r\n",value);
-    syslog(LOG_INFO, "Starting at %lu, writing value %i\n",start, value);
     if ( radio.write(&value,1) ) {
-
+        syslog(LOG_INFO,"Writing value: %i to address: %#llx\r\n",value, write_address);
+        radio.startListening();
         if ( !radio.available() ) {
             syslog(LOG_INFO,"Got blank response, time %lu", millis() - start);
         } else {
@@ -128,7 +129,6 @@ int main(int argc, char** argv)
                 int i = ev.code;
                 // Select case on send value, one print statement at end
                 int writeval = 0;
-                syslog(LOG_INFO, "Remote value %i, bool %d, address %#llx\n", i, val_changed, dst_address);
                 switch (i) {
                     case 398: syslog(LOG_INFO,"Red"); dst_address = pipes[1]; break;
                     case 399: syslog(LOG_INFO,"Green"); break;
@@ -146,6 +146,7 @@ int main(int argc, char** argv)
                             val_changed = true;
                         }
                 }
+                syslog(LOG_INFO, "Remote value %i, bool %d, address %#llx\n", i, val_changed, dst_address);
                 if ( val_changed ) {
                     signed long ret_time = write_to_radio(dst_address, writeval);
                     if (ret_time==0) {
@@ -158,6 +159,7 @@ int main(int argc, char** argv)
                     ret_time = 0;
                     val_changed = false;
                 }
+                i = 0;
             }
         }
     }
