@@ -1,3 +1,4 @@
+
 //#define __STDC_FORMAT_MACROS
 #include <cstdlib>
 #include <iostream>
@@ -14,13 +15,15 @@
 #include <time.h>
 
 using namespace std;
-const uint64_t pipes[2] ={ 0xABCDABCD71LL, 0x544d52687CLL };
+const uint64_t pipes[3] ={ 0xABCDABCD71LL, 0x544d52687CLL, 0x2756BEEFACLL };
 // NOPE: spi device, spi speed, ce gpio pin
 // Radio pin, CE pin, speed
 RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
+uint64_t dst_address = pipes[1];
 int fd;
 struct input_event ev;
 bool daemon_on = true;
+bool val_changed = false;
 void radio_setup(void)
 {
     // init radio for reading
@@ -56,7 +59,7 @@ signed long write_to_radio(uint64_t write_address, int value)
             syslog(LOG_INFO,"Got blank response, time %lu", millis() - start);
         } else {
             radio.read(&gotByte,1);
-            syslog(LOG_INFO,"Got response %d, time %lu", gotByte, millis() - start);
+            syslog(LOG_INFO,"Got response %C, time %lu", gotByte, millis() - start);
         }
         return (millis() - start);
     }
@@ -123,23 +126,36 @@ int main(int argc, char** argv)
                 int i = ev.code;
                 // Select case on send value, one print statement at end
                 int writeval = 0;
-                if (i == 11) {
-                    writeval = 0;
-                } else if (i <= 10 && i >= 2) {
-                    writeval = int((pow(2, i-2) - 1));
-                } else {
-                    writeval = 0;
+                syslog(LOG_INFO, "Remote value %i, bool %d, address %#010dst_address\n", i, val_changed, dst_address);
+/*                switch (i) {
+                    case 398: printf("Red  "); dst_address = pipes[1]; break;
+                    case 399: printf("Green"); break;
+                    case 400: printf("Yello"); dst_address = pipes[2]; break;
+                    case 401: printf("Blue "); break;
+                    default:*/
+                        if (i == 11) {
+                            val_changed = true;
+                            writeval = 0;
+                        } else if (i <= 10 && i >= 2) {
+                            writeval = int((pow(2, i-2) - 1));
+                            val_changed = true;
+                        } else {
+                            writeval = 0;
+                            val_changed = true;
+                        }
+               // }
+                if ( val_changed ) {
+                    syslog(LOG_INFO, "Sending %i\n", i);
+                    signed long ret_time = write_to_radio(dst_address, writeval);
+                    if (ret_time==0) {
+                        syslog(LOG_INFO, "Sending of %i failed\n", writeval);
+                        //printf("Sending of %i failed\n", writeval);
+                    } else {
+                        syslog(LOG_INFO, "Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
+                        //printf("Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
+                    }
+                    ret_time = 0;
                 }
-                syslog(LOG_INFO, "Sending %i\n", i);
-                signed long ret_time = write_to_radio(pipes[1], writeval);
-                if (ret_time==0) {
-                    syslog(LOG_INFO, "Sending of %i failed\n", writeval);
-                    //printf("Sending of %i failed\n", writeval);
-                } else {
-                    syslog(LOG_INFO, "Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
-                    //printf("Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
-                }
-                ret_time = 0;
             }
         }
     }
