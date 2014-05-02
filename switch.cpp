@@ -18,7 +18,7 @@ using namespace std;
 const uint64_t pipes[3] ={ 0xABCDABCD71LL, 0x544d52687CLL, 0x2756BEEFACLL };
 // NOPE: spi device, spi speed, ce gpio pin
 // Radio pin, CE pin, speed
-RF24 radio(RPI_V2_GPIO_P1_18, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
+RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
 uint64_t dst_address = pipes[1];
 int fd;
 struct input_event ev;
@@ -48,7 +48,7 @@ void radio_setup(void)
 signed long write_to_radio(uint64_t write_address, int value)
 {
     radio.stopListening();
-    //radio.openWritingPipe(write_address);
+    radio.openWritingPipe(write_address);
     // Return 0 on no response, return time on success
     char gotByte[8];
     unsigned long start = millis();
