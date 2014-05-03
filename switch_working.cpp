@@ -20,7 +20,7 @@ const uint64_t pipes[2] ={ 0xABCDABCD71LL, 0x544d52687CLL };
 RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
 int fd;
 struct input_event ev;
-bool daemon_on = true;
+bool daemon_on = false;
 void radio_setup(void)
 {
     // init radio for reading

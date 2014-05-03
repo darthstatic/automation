@@ -16,6 +16,7 @@
 
 using namespace std;
 const uint64_t pipes[3] ={ 0xABCDABCD71LL, 0x544d52687CLL, 0x2756BEEFACLL };
+
 // NOPE: spi device, spi speed, ce gpio pin
 // Radio pin, CE pin, speed
 RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
@@ -33,9 +34,7 @@ void radio_setup(void)
     radio.setAutoAck(1);
     radio.setRetries(0,15);
     radio.setDataRate(RF24_1MBPS);
-    //radio.setPALevel(RF24_PA_MAX);
-    //radio.setChannel(76);
-    //radio.setCRCLength(RF24_CRC_16);
+    radio.setPALevel(RF24_PA_HIGH);
     radio.openReadingPipe(1,pipes[0]);
     radio.openWritingPipe(dst_address);
     //radio.powerUp();
@@ -55,13 +54,13 @@ signed long write_to_radio(uint64_t write_address, int value)
     //radio.stopListening();
     // bool written = radio.write(&value,1);
     if ( radio.write(&value,1) ) {
-        syslog(LOG_INFO,"Writing value: %i to address: %#llx\r\n",value, write_address);
+        //syslog(LOG_INFO,"Writing value: %i to address: %#llx\r\n",value, write_address);
         radio.startListening();
         if ( !radio.available() ) {
-            syslog(LOG_INFO,"Got blank response, time %lu", millis() - start);
+            //syslog(LOG_INFO,"Got blank response, time %lu", millis() - start);
         } else {
             radio.read(&gotByte,1);
-            syslog(LOG_INFO,"Got response %C, time %lu", gotByte, millis() - start);
+            //syslog(LOG_INFO,"Got response %C, time %lu", gotByte, millis() - start);
         }
         return (millis() - start);
     }
@@ -132,7 +131,7 @@ int main(int argc, char** argv)
                 switch (i) {
                     case 398: syslog(LOG_INFO,"Red"); dst_address = pipes[1]; break;
                     case 399: syslog(LOG_INFO,"Green"); break;
-                    case 400: syslog(LOG_INFO,"Yello"); dst_address = pipes[2]; break;
+                    case 400: syslog(LOG_INFO,"Yellow"); dst_address = pipes[2]; break;
                     case 401: syslog(LOG_INFO,"Blue "); break;
                     default:
                         if (i == 11) {
