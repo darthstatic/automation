@@ -2,7 +2,8 @@
 //#define __STDC_FORMAT_MACROS
 #include <cstdlib>
 #include <iostream>
-#include "./RF24/RF24.h"
+#include <RF24.h>
+#include <RF24Network.h>
 #include <linux/input.h>
 #include <sys/types.h>
 #include <sys/stat.h>
