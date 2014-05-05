@@ -15,12 +15,34 @@
 #include <time.h>
 
 using namespace std;
-const uint64_t pipes[4] ={ 0xABCDABCD71LL, 0x544d52687CLL, 0x2756BEEFACLL, 0x1234567890LL };
 
 // NOPE: spi device, spi speed, ce gpio pin
 // Radio pin, CE pin, speed
 RF24 radio(RPI_V2_GPIO_P1_22, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
-uint64_t dst_address = pipes[1];
+RF24Network network(radio);
+
+
+const unsigned long interval = 1000; // ms
+const uint16_t nodes[4] = { 0, 1, 2, 3 };
+const char node_types[4] = { 'R', 'D', 'D', 'L' };
+const int dim_curve[10] = { 0, 1, 2, 4, 8, 16, 32, 64, 128, 255 };
+const int rgb_curve[10] = { 0x000000 /* Black	*/,
+							0xFF0000 /* Red		*/,
+							0x00FF00 /* Green	*/,
+							0x0000FF /* Blue	*/,
+							0x00FFFF /* Cyan	*/,
+							0xFF00FF /* Magenta	*/,
+							0xFFFF00 /* Yellow	*/,
+							0xFF7F00 /* Orange	*/,
+							0x7F00FF /* Violet	*/,
+							0xFFFFFF /* White	*/
+							}
+const int node_index = 0;
+
+const uint16_t this_node = nodes[node_index];
+const char current_type = node_types[node_index];
+uint8_t target_Node = 1;
+
 int fd;
 struct input_event ev;
 bool daemon_on = false;
@@ -28,15 +50,14 @@ bool val_changed = false;
 void radio_setup(void)
 {
     // init radio for reading
-    radio.begin();
+    SPI.begin();
+	radio.begin();
+	network.begin(90, this_node);
     //radio.enableDynamicPayloads();
-    radio.setPayloadSize(1);
     radio.setAutoAck(1);
     radio.setRetries(0,15);
     radio.setDataRate(RF24_1MBPS);
     radio.setPALevel(RF24_PA_HIGH);
-    radio.openReadingPipe(1,pipes[0]);
-    radio.openWritingPipe(dst_address);
     //radio.powerUp();
     radio.startListening();
     radio.printDetails();
@@ -44,10 +65,12 @@ void radio_setup(void)
     //radio.openWritingPipe(pipes[1]);
 }
 
-signed long write_to_radio(uint64_t write_address, int value)
+signed long write_to_radio(uint64_t node_address, int message)
 {
-    radio.stopListening();
-    radio.openWritingPipe(write_address);
+	RF24NetworkHeader header( node_address, node_types[node_address] );
+	return network.write( header, &message, sizeof(message));
+	
+	/*
     // Return 0 on no response, return time on success
     char gotByte[8];
     unsigned long start = millis();
@@ -67,8 +90,7 @@ signed long write_to_radio(uint64_t write_address, int value)
     else {
 
         return 0;
-    }
-    //radio.startListening();
+    }*/
 }
 
 int main(int argc, char** argv)
@@ -120,48 +142,58 @@ int main(int argc, char** argv)
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
     }
-    while(1) {
-        // loop();
-        read(fd, &ev, sizeof(struct input_event));
-        if(ev.type == 1) {
-            if (ev.value == 0) {
-                int i = ev.code;
-                // Select case on send value, one print statement at end
-                int writeval = 0;
-                switch (i) {
-                    case 398: syslog(LOG_INFO,"Red"); dst_address = pipes[1]; radio.setPayloadSize(1); break;
-                    case 399: syslog(LOG_INFO,"Green"); break;
-                    case 400: syslog(LOG_INFO,"Yellow"); dst_address = pipes[2]; radio.setPayloadSize(1); break;
-                    case 401: syslog(LOG_INFO,"Blue "); dst_address = pipes[3]; radio.setPayloadSize(6); break;
-                    default:
-                        if (i == 11) {
-                            val_changed = true;
-                            writeval = 0;
-                        } else if (i <= 10 && i >= 2) {
-                            writeval = int((pow(2, i-2) - 1));
-                            val_changed = true;
-                        } else {
-                            writeval = 0;
-                            val_changed = true;
-                        }
-                }
-                syslog(LOG_INFO, "Remote value %i, bool %d, address %#llx\n", i, val_changed, dst_address);
-                if ( val_changed ) {
-                    signed long ret_time = write_to_radio(dst_address, writeval);
-                    if (ret_time==0) {
-                        syslog(LOG_INFO, "Sending of %i failed\n", writeval);
-                        //printf("Sending of %i failed\n", writeval);
-                    } else {
-                        syslog(LOG_INFO, "Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
-                        //printf("Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
-                    }
-                    ret_time = 0;
-                    val_changed = false;
-                }
-                i = 0;
-            }
-        }
-    }
+    if (node_type[node_index] == 'R') {
+		while(1) {
+			// switch case (node_type[target_node])
+			// loop();
+			read(fd, &ev, sizeof(struct input_event));
+			if(ev.type == 1) {
+				if (ev.value == 0) {
+					int i = ev.code;
+					// Select case on send value, one print statement at end
+					int writeval = 0;
+					switch (i) {
+						case 398: syslog(LOG_INFO,"Red"); target_node = nodes[1]; break;
+						case 399: syslog(LOG_INFO,"Green"); break;
+						case 400: syslog(LOG_INFO,"Yellow"); target_node = nodes[2]; break;
+						case 401: syslog(LOG_INFO,"Blue "); target_node = nodes[3]; break;
+						default:
+							writeval = i;
+							val_changed = true;
+					}
+					syslog(LOG_INFO, "Remote value %i, bool %d, address %#llx\n", i, val_changed, dst_address);
+					if ( val_changed ) {
+						/*switch (node_types[target_node]) {
+							case 'D':
+								//write indexed dim_curve to node
+							case 'L':
+								//write indexed rgb_curve to node
+						}*/
+						if ( i >= 2 && i <= 11 ) {
+							bool ok = write_to_radio(target_node, i - 2);
+							if (ok) {
+								syslog(LOG_INFO, "Send value %i success\n",i-2);
+							} else {
+								syslog(LOG_INFO, "Send value %i failed\n", i-2);
+							}
+						}
+						
+						/*signed long ret_time = write_to_radio(dst_address, writeval);
+						if (ret_time==0) {
+							syslog(LOG_INFO, "Sending of %i failed\n", writeval);
+							//printf("Sending of %i failed\n", writeval);
+						} else {
+							syslog(LOG_INFO, "Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
+							//printf("Sent %i, got ACK, round-trip-delay: %lu ms\n", writeval, ret_time);
+						}*/
+						ret_time = 0;
+						val_changed = false;
+					}
+					i = 0;
+				}
+			}
+		}
+	}
     closelog();
     exit(EXIT_SUCCESS);
 }
